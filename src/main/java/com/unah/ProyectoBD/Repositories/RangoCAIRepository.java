@@ -12,6 +12,7 @@ import com.unah.ProyectoBD.Models.RangosCAIModel;
 import java.sql.Date;
 import java.sql.PreparedStatement;
 import java.sql.Statement;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -22,13 +23,22 @@ public class RangoCAIRepository {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
+    /**
+     * RowMapper para mapear un ResultSet a un objeto RangoCAI.
+     * Asegúrate de que los nombres de las columnas ('IdRangosCai', 'CAI',
+     * 'RangoInicial', 'RangoFinal', 'FechaLimiteEmision')
+     * coincidan exactamente con los de tu tabla en la base de datos, incluyendo
+     * mayúsculas y minúsculas.
+     */
     private RowMapper<RangosCAIModel> rowMapper = (rs, rowNum) -> {
         RangosCAIModel rangoCAI = new RangosCAIModel();
         rangoCAI.setIdRangosCai(rs.getInt("IdRangosCai"));
         rangoCAI.setCai(rs.getString("CAI"));
         rangoCAI.setRangoInicial(rs.getString("RangoInicial"));
         rangoCAI.setRangoFinal(rs.getString("RangoFinal"));
-        rangoCAI.setFechaLimiteEmision(rs.getDate("FechaLimiteEmision").toLocalDate());
+        // Manejo defensivo para FechaLimiteEmision, aunque sea NOT NULL en la DB
+        Date sqlDate = rs.getDate("FechaLimiteEmision");
+        rangoCAI.setFechaLimiteEmision(sqlDate != null ? sqlDate.toLocalDate() : null);
         return rangoCAI;
     };
 
@@ -80,5 +90,23 @@ public class RangoCAIRepository {
         String sql = "DELETE FROM RangosCAI WHERE IdRangosCai = ?";
         int affectedRows = jdbcTemplate.update(sql, id);
         return affectedRows > 0;
+    }
+
+    /**
+     * Encuentra el Rango CAI activo (el que tiene la fecha límite de emisión más
+     * lejana en el futuro).
+     * En un sistema real, podría haber una columna 'activo' o una lógica más
+     * compleja.
+     * 
+     * @return Un Optional que contiene el RangoCAI activo, o vacío si no hay
+     *         ninguno.
+     */
+    public Optional<RangosCAIModel> findActiveRangoCAI() {
+        // Ordena por FechaLimiteEmision de forma descendente para obtener el más
+        // reciente/válido
+        // y toma el primero. Esto asume que el CAI más 'nuevo' es el activo.
+        String sql = "SELECT TOP 1 * FROM RangosCAI WHERE FechaLimiteEmision >= ? ORDER BY FechaLimiteEmision DESC";
+        List<RangosCAIModel> rangos = jdbcTemplate.query(sql, rowMapper, LocalDate.now());
+        return rangos.isEmpty() ? Optional.empty() : Optional.of(rangos.get(0));
     }
 }

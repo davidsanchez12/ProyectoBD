@@ -87,4 +87,28 @@ public class FacturaRepository {
         int affectedRows = jdbcTemplate.update(sql, id);
         return affectedRows > 0;
     }
+
+    /**
+     * Busca el número de factura más alto para un rango CAI específico.
+     * Esto ayuda a determinar el siguiente número correlativo.
+     * 
+     * @param idRangosCAI El ID del rango CAI.
+     * @return El número de factura más alto como String, o Optional.empty() si no
+     *         hay facturas para ese CAI.
+     */
+    public Optional<String> findLastNumeroFacturaByRangosCAIId(Integer idRangosCAI) {
+        // Asumiendo que NumeroFactura tiene el formato "000-001-01-00000001"
+        // Necesitamos extraer la parte numérica final para encontrar el máximo.
+        // Esto puede variar dependiendo de cómo se manejen los números de factura.
+        // Para simplificar, buscaremos el número de factura más alto alfabéticamente
+        // que es un proxy para el valor numérico si el padding con ceros es
+        // consistente.
+        String sql = "SELECT TOP 1 NumeroFactura FROM Facturas WHERE IdRangosCAI = ? ORDER BY NumeroFactura DESC";
+        try {
+            String lastNumero = jdbcTemplate.queryForObject(sql, String.class, idRangosCAI);
+            return Optional.ofNullable(lastNumero);
+        } catch (org.springframework.dao.EmptyResultDataAccessException e) {
+            return Optional.empty();
+        }
+    }
 }
