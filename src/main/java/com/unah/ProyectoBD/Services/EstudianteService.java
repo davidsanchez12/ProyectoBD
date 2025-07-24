@@ -91,11 +91,13 @@ public class EstudianteService {
             nuevoEstudiante.setNumeroCuenta(registroEstudianteDTO.getNumeroCuenta());
             nuevoEstudiante = estudianteRepository.save(nuevoEstudiante);
 
-            // Asignar Rol de "ESTUDIANTE" al nuevo usuario
-            RolesModel rolEstudiante = new RolesModel();
-            rolEstudiante.setNombreRol("ESTUDIANTE");
-            rolEstudiante.setIdUsuario(nuevoUsuario.getIdUsuarios());
-            rolRepository.save(rolEstudiante);
+            /*
+             * // Asignar Rol de "ESTUDIANTE" al nuevo usuario
+             * RolesModel rolEstudiante = new RolesModel();
+             * rolEstudiante.setNombreRol("ESTUDIANTE");
+             * rolEstudiante.setIdUsuario(nuevoUsuario.getIdUsuarios());
+             * rolRepository.save(rolEstudiante);
+             */
 
             return ResponseEntity.status(HttpStatus.CREATED).body(nuevoEstudiante);
 
