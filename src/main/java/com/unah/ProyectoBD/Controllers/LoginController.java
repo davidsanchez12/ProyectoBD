@@ -1,60 +1,45 @@
-/*
- * package com.unah.ProyectoBD.Controllers;
- * 
- * // Puedes crear un nuevo controlador, por ejemplo, AuthController.java
- * 
- * import org.springframework.security.core.Authentication;
- * import org.springframework.stereotype.Controller;
- * import org.springframework.web.bind.annotation.GetMapping;
- * import org.springframework.web.bind.annotation.PostMapping;
- * import org.springframework.web.bind.annotation.ModelAttribute;
- * 
- * import com.unah.ProyectoBD.Dtos.RegistroEstudianteDto;
- * 
- * @Controller // ¡Ojo! No @RestController
- * public class LoginController {
- * 
- * // Muestra la página de login
- * 
- * @GetMapping("/login")
- * public String showLoginForm() {
- * return "login"; // Devuelve el nombre del archivo login.html
- * }
- * 
- * // Muestra la página de registro
- * 
- * @GetMapping("/registro")
- * public String showRegistrationForm(org.springframework.ui.Model model) {
- * // Envía objetos vacíos al formulario para el data-binding
- * model.addAttribute("estudianteDto", new RegistroEstudianteDto());
- * // Podrías tener un DTO general para el registro
- * return "registro"; // Devuelve el nombre del archivo registro.html
- * }
- * 
- * // Procesa el registro de un estudiante (ejemplo)
- * 
- * @PostMapping("/registro/estudiante")
- * public String processStudentRegistration(@ModelAttribute("estudianteDto")
- * RegistroEstudianteDto dto) {
- * // Aquí llamas a tu servicio para guardar el nuevo estudiante
- * // userService.registrarEstudiante(dto);
- * return "redirect:/login?registro_exitoso";
- * }
- * 
- * // Controlador para redirigir según el rol del usuario
- * 
- * @GetMapping("/dashboard")
- * public String dashboard(Authentication authentication) {
- * // `Authentication` tiene la información del usuario logueado
- * if (authentication.getAuthorities().stream().anyMatch(a ->
- * a.getAuthority().equals("ESTUDIANTE"))) {
- * return "redirect:/tutorias/disponibles";
- * }
- * if (authentication.getAuthorities().stream().anyMatch(a ->
- * a.getAuthority().equals("TUTOR"))) {
- * return "redirect:/tutorias/mis-tutorias";
- * }
- * return "redirect:/login"; // Por si acaso
- * }
- * }
- */
+package com.unah.ProyectoBD.Controllers;
+
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.GetMapping;
+
+@Controller
+public class LoginController {
+
+    /**
+     * Muestra la página de login personalizada.
+     * La ruta "/login" está configurada en tu SecurityConfig.
+     */
+    @GetMapping("/login")
+    public String mostrarPaginaLogin() {
+        return "login"; // Devuelve el nombre de tu archivo login.html
+    }
+
+    /**
+     * Punto central de redirección después de un login exitoso.
+     * SecurityConfig está configurado para redirigir aquí.
+     * Este método revisa el rol del usuario y lo envía a su panel correspondiente.
+     */
+    @GetMapping("/dashboard")
+    public String redirigirPorRol(Authentication authentication) {
+        // Obtenemos la primera autoridad (rol) del usuario autenticado.
+        String rol = authentication.getAuthorities().stream()
+                .findFirst()
+                .map(GrantedAuthority::getAuthority)
+                .orElse("");
+
+        if ("ESTUDIANTE".equals(rol)) {
+            return "redirect:/tutorias/disponibles"; // Panel del estudiante
+        }
+
+        if ("TUTOR".equals(rol)) {
+            return "redirect:/tutorias/mis-tutorias"; // Panel del tutor
+        }
+
+        // Si no tiene un rol conocido, lo mandamos a la página de inicio o de error.
+        return "redirect:/";
+    }
+
+}

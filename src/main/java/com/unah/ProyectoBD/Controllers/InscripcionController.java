@@ -1,94 +1,78 @@
 package com.unah.ProyectoBD.Controllers;
 
+import com.unah.ProyectoBD.Dtos.InscripcionRequestDto;
+import com.unah.ProyectoBD.Models.EstudianteModel;
+import com.unah.ProyectoBD.Repositories.EstudianteRepository; // Importa tu repositorio
+import com.unah.ProyectoBD.Services.InscripcionService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.security.core.Authentication; // Para obtener el usuario logueado
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
-import com.unah.ProyectoBD.Dtos.InscripcionRequestDto;
-import com.unah.ProyectoBD.Models.EstudianteModel;
-import com.unah.ProyectoBD.Models.InscripcionModel;
-import com.unah.ProyectoBD.Models.TutoriaModel;
-import com.unah.ProyectoBD.Repositories.EstudianteRepository;
-import com.unah.ProyectoBD.Repositories.InscripcionRepository;
-import com.unah.ProyectoBD.Repositories.TutoriaRepository;
-
-import jakarta.validation.Valid;
-import java.time.LocalDate;
 import java.util.Optional;
 
-@RestController
-@RequestMapping("/api/inscripciones")
+@Controller
+@RequestMapping("/inscripcion")
 public class InscripcionController {
 
     @Autowired
-    private InscripcionRepository inscripcionRepository;
+    private InscripcionService inscripcionService;
+
     @Autowired
-    private EstudianteRepository estudianteRepository;
-    @Autowired
-    private TutoriaRepository tutoriaRepository;
+    private EstudianteRepository estudianteRepository; // Para buscar al estudiante por su correo
+
+    @PostMapping("/matricular/{idTutoria}")
+    public String matricularEnTutoria(
+            @PathVariable("idTutoria") Integer idTutoria,
+            Authentication authentication, // Objeto de Spring Security con la info del usuario
+            RedirectAttributes redirectAttributes) {
+
+        // 1. Obtener el correo del usuario que ha iniciado sesión
+        String correoUsuario = authentication.getName();
+
+        // 2. Buscar el ID del estudiante correspondiente a ese correo
+        Optional<EstudianteModel> estudianteOptional = estudianteRepository.findByCorreo(correoUsuario);
+
+        if (estudianteOptional.isEmpty()) {
+            redirectAttributes.addFlashAttribute("errorInscripcion", "No se pudo encontrar tu perfil de estudiante.");
+            return "redirect:/tutorias/disponibles"; // O a donde corresponda
+        }
+
+        Integer idEstudiante = estudianteOptional.get().getIdEstudiante();
+
+        // 3. Preparar el DTO para el servicio
+        InscripcionRequestDto inscripcionDto = new InscripcionRequestDto();
+        inscripcionDto.setIdEstudiante(idEstudiante);
+        inscripcionDto.setIdTutoria(idTutoria);
+
+        // 4. Llamar al servicio y manejar la respuesta
+        ResponseEntity<?> response = inscripcionService.inscribirEstudiante(inscripcionDto);
+
+        if (response.getStatusCode() == HttpStatus.CREATED) {
+            redirectAttributes.addFlashAttribute("exitoInscripcion", "¡Inscripción exitosa!");
+        } else {
+            // El servicio ya genera un mensaje de error específico
+            String mensajeError = (String) response.getBody();
+            redirectAttributes.addFlashAttribute("errorInscripcion", mensajeError);
+        }
+
+        // 5. Redirigir de vuelta a la lista de tutorías
+        return "redirect:/tutorias/disponibles";
+    }
 
     /**
-     * Endpoint para inscribir a un estudiante en una tutoría.
-     * Realiza validaciones para asegurar que el estudiante y la tutoría existan,
-     * que el estudiante no esté ya inscrito en esa tutoría y que no se haya
-     * alcanzado el límite de estudiantes para la tutoría.
-     * 
-     * @param inscripcionRequestDTO Objeto DTO con los IDs del estudiante y la
-     *                              tutoría.
-     * @return ResponseEntity con la inscripción creada o un mensaje de error.
+     * NOTA IMPORTANTE:
+     * Para que esto funcione, necesitas un método en tu `EstudianteRepository` que
+     * pueda
+     * buscar un estudiante a partir de su correo electrónico (que es el username en
+     * Spring Security).
+     *
+     * public Optional<EstudianteModel> findByCorreo(String correo);
+     * * La implementación dependerá de cómo estén relacionadas tus tablas.
      */
-    @PostMapping("/inscribir")
-    @Transactional
-    public ResponseEntity<?> inscribirEstudiante(@Valid @RequestBody InscripcionRequestDto inscripcionRequestDTO) {
-        // 1. Validar que el estudiante exista
-        Optional<EstudianteModel> estudianteOptional = estudianteRepository
-                .findById(inscripcionRequestDTO.getIdEstudiante());
-        if (estudianteOptional.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body("Estudiante con ID " + inscripcionRequestDTO.getIdEstudiante() + " no encontrado.");
-        }
-
-        // 2. Validar que la tutoría exista
-        Optional<TutoriaModel> tutoriaOptional = tutoriaRepository.findById(inscripcionRequestDTO.getIdTutoria());
-        if (tutoriaOptional.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body("Tutoría con ID " + inscripcionRequestDTO.getIdTutoria() + " no encontrada.");
-        }
-
-        TutoriaModel tutoria = tutoriaOptional.get();
-
-        // 3. Validar si el estudiante ya está inscrito en esta tutoría
-        if (inscripcionRepository.existsByEstudianteIdAndTutoriaId(inscripcionRequestDTO.getIdEstudiante(),
-                inscripcionRequestDTO.getIdTutoria())) {
-            return ResponseEntity.status(HttpStatus.CONFLICT)
-                    .body("El estudiante con ID " + inscripcionRequestDTO.getIdEstudiante()
-                            + " ya está inscrito en la tutoría con ID " + inscripcionRequestDTO.getIdTutoria() + ".");
-        }
-
-        // 4. Validar el límite de estudiantes
-        int inscripcionesActuales = inscripcionRepository.countInscripcionesByTutoriaId(tutoria.getIdTutoria());
-        if (inscripcionesActuales >= tutoria.getLimiteEstudiantes()) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("La tutoría con ID " + tutoria.getIdTutoria()
-                    + " ha alcanzado su límite de " + tutoria.getLimiteEstudiantes() + " estudiantes.");
-        }
-
-        try {
-            InscripcionModel nuevaInscripcion = new InscripcionModel();
-            nuevaInscripcion.setIdEstudiante(inscripcionRequestDTO.getIdEstudiante());
-            nuevaInscripcion.setIdTutoria(inscripcionRequestDTO.getIdTutoria());
-            nuevaInscripcion.setFechaInscripcion(LocalDate.now()); // Fecha de inscripción actual
-
-            nuevaInscripcion = inscripcionRepository.save(nuevaInscripcion);
-            return ResponseEntity.status(HttpStatus.CREATED).body(nuevaInscripcion);
-
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Error al inscribir al estudiante: " + e.getMessage());
-        }
-    }
 }

@@ -1,34 +1,34 @@
+
 package com.unah.ProyectoBD.Controllers;
+
+import com.unah.ProyectoBD.Dtos.CrearTutoriaDto;
+import com.unah.ProyectoBD.Models.TutoresModel;
+import com.unah.ProyectoBD.Repositories.ModalidadRepository;
+import com.unah.ProyectoBD.Repositories.TopicoRepository;
+import com.unah.ProyectoBD.Repositories.TutorRepository;
+import com.unah.ProyectoBD.Services.TutoriaService;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.security.core.Authentication;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
-import com.unah.ProyectoBD.Dtos.CrearTutoriaDto;
-import com.unah.ProyectoBD.Models.ModalidadModel;
-import com.unah.ProyectoBD.Models.TopicosModel;
-import com.unah.ProyectoBD.Models.TutoresModel;
-import com.unah.ProyectoBD.Models.TutoriaModel;
-import com.unah.ProyectoBD.Repositories.ModalidadRepository;
-import com.unah.ProyectoBD.Repositories.TopicoRepository;
-import com.unah.ProyectoBD.Repositories.TutorRepository;
-import com.unah.ProyectoBD.Repositories.TutoriaRepository;
-
-import jakarta.validation.Valid;
-import java.math.BigDecimal;
+import java.util.Collections;
 import java.util.Optional;
 
-@RestController
-@RequestMapping("/api/tutorias")
+@Controller
+@RequestMapping("/tutorias") // Agrupamos las rutas relacionadas a tutorías
 public class TutoriaController {
 
     @Autowired
-    private TutoriaRepository tutoriaRepository;
+    private TutoriaService tutoriaService;
     @Autowired
     private TutorRepository tutorRepository;
     @Autowired
@@ -36,69 +36,66 @@ public class TutoriaController {
     @Autowired
     private ModalidadRepository modalidadRepository;
 
-    // Valores fijos para nuevas tutorías
-    private static final BigDecimal PRECIO_FIJO_TUTORIA = new BigDecimal("3500.00");
-    private static final Integer LIMITE_ESTUDIANTES_FIJO = 20;
+    /**
+     * Muestra el formulario para crear una nueva tutoría.
+     */
+    @GetMapping("/crear")
+    public String mostrarFormularioCreacion(Model model, Authentication authentication) {
+        String correoTutor = authentication.getName();
+        // Buscamos al tutor que ha iniciado sesión para obtener su ID
+        Optional<TutoresModel> tutorOpt = tutorRepository.findByCorreo(correoTutor);
+
+        if (tutorOpt.isPresent()) {
+            Integer tutorId = tutorOpt.get().getIdTutor();
+            // Pasamos a la vista la lista de tópicos de ESE tutor y todas las modalidades
+            model.addAttribute("listaTopicos", topicoRepository.findById(tutorId));
+            model.addAttribute("listaModalidades", modalidadRepository.findAll());
+        } else {
+            // Si no se encuentra el tutor, se pasa una lista vacía para evitar errores
+            model.addAttribute("listaTopicos", Collections.emptyList());
+            model.addAttribute("listaModalidades", Collections.emptyList());
+            model.addAttribute("error", "No se pudo encontrar tu perfil de tutor.");
+        }
+
+        // Se envía un DTO vacío para que el formulario pueda enlazar los campos
+        model.addAttribute("tutoriaDto", new CrearTutoriaDto());
+        return "crear_tutoria"; // Nombre del archivo HTML
+    }
 
     /**
-     * Endpoint para crear una nueva tutoría.
-     * Realiza validaciones para asegurar que el tutor, tópico y modalidad existan,
-     * y que el tutor de la tutoría coincida con el tutor asociado al tópico.
-     * El precio y el límite de estudiantes se establecen con valores fijos.
-     * 
-     * @param crearTutoriaDTO Objeto DTO con los datos para crear la tutoría.
-     * @return ResponseEntity con la tutoría creada o un mensaje de error.
+     * Procesa los datos del formulario de creación de tutoría.
      */
     @PostMapping("/crear")
-    @Transactional
-    public ResponseEntity<?> crearTutoria(@Valid @RequestBody CrearTutoriaDto crearTutoriaDTO) {
-        // 1. Validar que el tutor exista
-        Optional<TutoresModel> tutorOptional = tutorRepository.findById(crearTutoriaDTO.getIdTutor());
-        if (tutorOptional.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body("Tutor con ID " + crearTutoriaDTO.getIdTutor() + " no encontrado.");
+    public String procesarCreacion(@ModelAttribute("tutoriaDto") CrearTutoriaDto tutoriaDto,
+            Authentication authentication,
+            RedirectAttributes redirectAttributes,
+            Model model) {
+
+        String correoTutor = authentication.getName();
+        Optional<TutoresModel> tutorOpt = tutorRepository.findByCorreo(correoTutor);
+
+        if (tutorOpt.isEmpty()) {
+            redirectAttributes.addFlashAttribute("error", "No se pudo verificar tu identidad de tutor.");
+            return "redirect:/"; // Redirigir a la página de inicio o de login
         }
 
-        // 2. Validar que el tópico exista
-        Optional<TopicosModel> topicoOptional = topicoRepository.findById(crearTutoriaDTO.getIdTopico());
-        if (topicoOptional.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body("Tópico con ID " + crearTutoriaDTO.getIdTopico() + " no encontrado.");
-        }
+        // Asignamos el ID del tutor logueado al DTO antes de enviarlo al servicio
+        tutoriaDto.setIdTutor(tutorOpt.get().getIdTutor());
 
-        // 3. Validar que la modalidad exista
-        Optional<ModalidadModel> modalidadOptional = modalidadRepository.findById(crearTutoriaDTO.getIdModalidad());
-        if (modalidadOptional.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body("Modalidad con ID " + crearTutoriaDTO.getIdModalidad() + " no encontrada.");
-        }
+        // Llamamos al servicio para crear la tutoría
+        ResponseEntity<?> response = tutoriaService.crearTutoria(tutoriaDto);
 
-        // 4. Validar que el tutor de la tutoría coincida con el tutor asignado al
-        // tópico
-        // Esto asegura la consistencia: una tutoría sobre un tópico X debe ser
-        // impartida por el tutor de X.
-        if (!topicoOptional.get().getIdTutor().equals(crearTutoriaDTO.getIdTutor())) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body("El tutor especificado (" + crearTutoriaDTO.getIdTutor()
-                            + ") no es el tutor asignado al tópico (" + topicoOptional.get().getIdTutor() + ").");
-        }
-
-        try {
-            TutoriaModel nuevaTutoria = new TutoriaModel();
-            nuevaTutoria.setIdTutor(crearTutoriaDTO.getIdTutor());
-            nuevaTutoria.setIdTopico(crearTutoriaDTO.getIdTopico());
-            nuevaTutoria.setHoraIncio(crearTutoriaDTO.getHoraIncio());
-            nuevaTutoria.setHoraFin(crearTutoriaDTO.getHoraFin());
-            nuevaTutoria.setPrecio(PRECIO_FIJO_TUTORIA); // Precio fijo
-            nuevaTutoria.setIdModalidad(crearTutoriaDTO.getIdModalidad());
-            nuevaTutoria.setLimiteEstudiantes(LIMITE_ESTUDIANTES_FIJO); // Límite fijo
-
-            nuevaTutoria = tutoriaRepository.save(nuevaTutoria);
-            return ResponseEntity.status(HttpStatus.CREATED).body(nuevaTutoria);
-
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Error al crear la tutoría: " + e.getMessage());
+        if (response.getStatusCode() == HttpStatus.CREATED) {
+            redirectAttributes.addFlashAttribute("exito", "¡Tutoría creada exitosamente!");
+            return "redirect:/tutorias/mis-tutorias"; // Redirige al panel del tutor
+        } else {
+            // Si hay un error, volvemos a mostrar el formulario con el mensaje de error
+            model.addAttribute("error", response.getBody());
+            // Recargamos las listas para que los dropdowns no queden vacíos
+            model.addAttribute("listaTopicos", topicoRepository.findById(tutorOpt.get().getIdTutor()));
+            model.addAttribute("listaModalidades", modalidadRepository.findAll());
+            return "crear_tutoria";
         }
     }
+
 }

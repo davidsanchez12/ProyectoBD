@@ -78,4 +78,19 @@ public class EstudianteRepository {
         int affectedRows = jdbcTemplate.update(sql, id);
         return affectedRows > 0;
     }
+
+    public Optional<EstudianteModel> findByCorreo(String correo) {
+        // La consulta SQL une Estudiantes con Usuarios para encontrar al estudiante por
+        // el email
+        String sql = "SELECT e.* FROM Estudiantes e " +
+                "JOIN Usuarios u ON e.IdUsuario = u.IdUsuarios " +
+                "WHERE u.CorreoInstitucional = ?";
+
+        List<EstudianteModel> estudiantes = jdbcTemplate.query(sql, rowMapper, correo);
+
+        // Si la lista no está vacía, devuelve el primer (y único) elemento.
+        // Si no, devuelve un Optional vacío.
+        return estudiantes.isEmpty() ? Optional.empty() : Optional.of(estudiantes.get(0));
+    }
+
 }

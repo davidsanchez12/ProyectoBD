@@ -7,6 +7,7 @@ import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.stereotype.Repository;
 
+import com.unah.ProyectoBD.Models.EstudianteModel;
 import com.unah.ProyectoBD.Models.TutoresModel;
 
 import java.sql.PreparedStatement;
@@ -71,4 +72,19 @@ public class TutorRepository {
         int affectedRows = jdbcTemplate.update(sql, id);
         return affectedRows > 0;
     }
+
+    public Optional<TutoresModel> findByCorreo(String correo) {
+        // La consulta SQL une Estudiantes con Usuarios para encontrar al estudiante por
+        // el email
+        String sql = "SELECT e.* FROM Tutores e " +
+                "JOIN Usuarios u ON e.IdUsuario = u.IdUsuarios " +
+                "WHERE u.CorreoInstitucional = ?";
+
+        List<TutoresModel> tutores = jdbcTemplate.query(sql, rowMapper, correo);
+
+        // Si la lista no está vacía, devuelve el primer (y único) elemento.
+        // Si no, devuelve un Optional vacío.
+        return tutores.isEmpty() ? Optional.empty() : Optional.of(tutores.get(0));
+    }
+
 }

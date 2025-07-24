@@ -68,4 +68,10 @@ public class RolRepository {
         int affectedRows = jdbcTemplate.update(sql, id);
         return affectedRows > 0;
     }
+
+    public List<RolesModel> findRolesByIdUsuario(Integer idUsuario) {
+        String sql = "SELECT * FROM Roles WHERE IdUsuario = ?";
+        return jdbcTemplate.query(sql, rowMapper, idUsuario);
+    }
+
 }
