@@ -1,0 +1,23 @@
+<head>
+    <title>RegistroEstudiantes</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+</head>
+
+
+<div th:if="${registroExitoso}" class="alert alert-success" role="alert">
+    <p th:text="${registroExitoso}"></p>
+</div>
+
+<div th:if="${errorRegistro}" class="alert alert-danger" role="alert">
+    <p th:text="${errorRegistro}"></p>
+</div>
+
+<form th:action="@{/registro/estudiante}" th:object="${estudianteDto}" method="post">
+    <div>
+        <label for="primerNombre">Primer Nombre:</label>
+        <input type="text" id="primerNombre" th:field="*{primerNombre}">
+        <p th:if="${#fields.hasErrors('primerNombre')}" th:errors="*{primerNombre}" style="color:red;"></p>
+    </div>
+    
+    <button type="submit">Registrarse</button>
+</form>
