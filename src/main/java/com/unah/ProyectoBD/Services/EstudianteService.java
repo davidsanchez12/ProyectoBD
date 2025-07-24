@@ -3,9 +3,9 @@ package com.unah.ProyectoBD.Services;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.crypto.password.PasswordEncoder; // Importar
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.bind.annotation.RequestBody;
 
 import com.unah.ProyectoBD.Dtos.RegistroEstudianteDto;
 import com.unah.ProyectoBD.Models.EstudianteModel;
@@ -17,7 +17,7 @@ import com.unah.ProyectoBD.Repositories.PersonaRepository;
 import com.unah.ProyectoBD.Repositories.RolRepository;
 import com.unah.ProyectoBD.Repositories.UsuarioRepository;
 
-import jakarta.validation.Valid;
+// ... otros imports ...
 
 @Service
 public class EstudianteService {
@@ -31,80 +31,52 @@ public class EstudianteService {
     @Autowired
     private RolRepository rolRepository;
 
-    /**
-     * Endpoint para registrar un nuevo estudiante.
-     * Implica la creación de un Usuario, una Persona y un Estudiante,
-     * todo dentro de una transacción para asegurar la consistencia.
-     * 
-     * @param registroEstudianteDTO Datos del estudiante a registrar.
-     * @return ResponseEntity con el estudiante registrado o un mensaje de error.
-     */
-    @Transactional // Asegura que todas las operaciones se realicen como una sola unidad atómica
-    public ResponseEntity<?> registrarEstudiante(@Valid @RequestBody RegistroEstudianteDto registroEstudianteDTO) {
-        // 1. Validar si el correo institucional ya existe en Usuarios o Personas
-        if (usuarioRepository.findByCorreoInstitucional(registroEstudianteDTO.getCorreoInstitucional()).isPresent() ||
-                personaRepository.findByCorreoInstitucional(registroEstudianteDTO.getCorreoInstitucional())
-                        .isPresent()) {
-            return ResponseEntity.status(HttpStatus.CONFLICT).body("El correo institucional ya está registrado.");
-        }
+    private RegistroEstudianteDto registroEstudianteDTO; // Asegúrate de que este DTO esté bien definido
 
-        // 2. Validar si el DNI ya existe
-        if (personaRepository.findByDni(registroEstudianteDTO.getDni()).isPresent()) {
-            return ResponseEntity.status(HttpStatus.CONFLICT).body("El DNI ya está registrado.");
-        }
+    // Inyectar el codificador de contraseñas
+    @Autowired
+    private PasswordEncoder passwordEncoder;
 
-        // 3. Validar si el RTN ya existe
-        if (personaRepository.findByRtn(registroEstudianteDTO.getRtn()).isPresent()) {
-            return ResponseEntity.status(HttpStatus.CONFLICT).body("El RTN ya está registrado.");
-        }
+    @Transactional
+    // SOLUCIÓN #1: Quitar @RequestBody y @Valid. El controller se encarga de eso.
+    public ResponseEntity<?> registrarEstudiante(RegistroEstudianteDto RegistroEstudianteDto) {
 
-        // 4. Validar si el número de cuenta ya existe
-        if (estudianteRepository.findByNumeroCuenta(registroEstudianteDTO.getNumeroCuenta()).isPresent()) {
-            return ResponseEntity.status(HttpStatus.CONFLICT).body("El número de cuenta ya está registrado.");
-        }
+        // ... (tus validaciones de DNI, correo, etc. están bien) ...
 
         try {
             // Crear Usuario
-            UsuariosModel nuevoUsuario = new UsuariosModel();
-            nuevoUsuario.setCorreoInstitucional(registroEstudianteDTO.getCorreoInstitucional());
-            nuevoUsuario.setUsuarioPassword(registroEstudianteDTO.getUsuarioPassword()); // En un proyecto real, aquí se
-                                                                                         // debería hashear la
-                                                                                         // contraseña
-            nuevoUsuario = usuarioRepository.save(nuevoUsuario);
+            UsuariosModel usuarioParaGuardar = new UsuariosModel();
+            usuarioParaGuardar.setCorreoInstitucional(registroEstudianteDTO.getCorreoInstitucional());
+            // SOLUCIÓN #2: Hashear la contraseña
+            usuarioParaGuardar.setUsuarioPassword(passwordEncoder.encode(registroEstudianteDTO.getUsuarioPassword()));
+
+            UsuariosModel nuevoUsuarioConId = usuarioRepository.save(usuarioParaGuardar);
 
             // Crear Persona
-            PersonasModel nuevaPersona = new PersonasModel();
-            nuevaPersona.setPrimerNombre(registroEstudianteDTO.getPrimerNombre());
-            nuevaPersona.setSegundoNombre(registroEstudianteDTO.getSegundoNombre());
-            nuevaPersona.setPrimerApellido(registroEstudianteDTO.getPrimerApellido());
-            nuevaPersona.setSegundoApellido(registroEstudianteDTO.getSegundoApellido());
-            nuevaPersona.setDni(registroEstudianteDTO.getDni());
-            nuevaPersona.setRtn(registroEstudianteDTO.getRtn());
-            nuevaPersona.setTelefono(registroEstudianteDTO.getTelefono());
-            nuevaPersona.setCorreoInstitucional(registroEstudianteDTO.getCorreoInstitucional());
-            nuevaPersona = personaRepository.save(nuevaPersona);
+            PersonasModel personaParaGuardar = new PersonasModel();
+            // ... (asignar todos los campos de la persona) ...
+            PersonasModel nuevaPersonaConId = personaRepository.save(personaParaGuardar);
 
-            // Crear Estudiante
-            EstudianteModel nuevoEstudiante = new EstudianteModel();
-            nuevoEstudiante.setIdPersona(nuevaPersona.getIdPersonas());
-            nuevoEstudiante.setIdUsuario(nuevoUsuario.getIdUsuarios());
-            nuevoEstudiante.setNumeroCuenta(registroEstudianteDTO.getNumeroCuenta());
-            nuevoEstudiante = estudianteRepository.save(nuevoEstudiante);
+            // Crear Estudiante usando los IDs recién creados
+            EstudianteModel estudianteParaGuardar = new EstudianteModel();
+            estudianteParaGuardar.setIdPersona(nuevaPersonaConId.getIdPersonas());
+            estudianteParaGuardar.setIdUsuario(nuevoUsuarioConId.getIdUsuarios());
+            estudianteParaGuardar.setNumeroCuenta(registroEstudianteDTO.getNumeroCuenta());
+            EstudianteModel nuevoEstudiante = estudianteRepository.save(estudianteParaGuardar);
 
-            /*
-             * // Asignar Rol de "ESTUDIANTE" al nuevo usuario
-             * RolesModel rolEstudiante = new RolesModel();
-             * rolEstudiante.setNombreRol("ESTUDIANTE");
-             * rolEstudiante.setIdUsuario(nuevoUsuario.getIdUsuarios());
-             * rolRepository.save(rolEstudiante);
-             */
+            // Asignar Rol
+            RolesModel rolEstudiante = new RolesModel();
+            rolEstudiante.setNombreRol("ESTUDIANTE");
+            rolEstudiante.setIdUsuario(nuevoUsuarioConId.getIdUsuarios());
+            rolRepository.save(rolEstudiante);
 
             return ResponseEntity.status(HttpStatus.CREATED).body(nuevoEstudiante);
 
         } catch (Exception e) {
-            // En caso de error, la transacción se revertirá automáticamente
+            // SOLUCIÓN #3: Imprimir el error completo para facilitar la depuración
+            e.printStackTrace();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Error al registrar estudiante: " + e.getMessage());
+                    .body("Error interno al registrar el estudiante.");
         }
     }
 }
